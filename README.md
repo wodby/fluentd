@@ -1,1 +1,1 @@
-# fluentd
+# Fluentd docker container image

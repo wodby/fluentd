@@ -1,0 +1,27 @@
+language: python
+
+sudo: required
+
+services:
+  - docker
+
+env:
+  global:
+    - ROLE=forwarder
+    - ROLE=aggregator
+
+script:
+  - cd ./$ROLE
+  - make && make test
+
+after_success: |
+  if [ "$TRAVIS_PULL_REQUEST" == "false" ] && ([ "$TRAVIS_BRANCH" == "master" ] || [ -n "$TRAVIS_TAG" ]); then
+    docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+    make release
+
+    if [ -n "$TRAVIS_TAG" ]; then
+      make VERSION="$ROLE-$TRAVIS_TAG" release
+    fi
+  fi
+
+after_failure: make logs
