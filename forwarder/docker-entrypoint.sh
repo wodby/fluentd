@@ -6,6 +6,10 @@ if [[ -n "${DEBUG}" ]]; then
   set -x
 fi
 
-gotpl '/etc/gotpl/td-agent.conf.tpl' > '/etc/td-agent/td-agent.conf'
+gotpl "/etc/gotpl/fluent.conf.tpl" > "/fluentd/etc/${FLUENTD_CONF}"
 
-exec td-agent $@
+if [[ -z $@ ]]; then
+    exec fluentd -c "/fluentd/etc/${FLUENTD_CONF}"
+else
+    exec $@
+fi

@@ -1,22 +1,33 @@
-FROM gcr.io/google_containers/ubuntu-slim:0.4
+FROM fluent/fluentd:v0.14-onbuild
 
-# Disable prompts from apt.
-ENV DEBIAN_FRONTEND noninteractive
-ENV LD_PRELOAD /opt/td-agent/embedded/lib/libjemalloc.so
 ENV GOTPL_VER 0.1.5
+ENV GOTPL_URL https://github.com/wodby/gotpl/releases/download/${GOTPL_VER}/gotpl-alpine-linux-amd64-${GOTPL_VER}.tar.gz
 
-# Ensure there are enough file descriptors for running Fluentd.
-RUN ulimit -n 65536 && \
+USER root
 
-    # Download and install Gotpl
-    wget -qO- https://github.com/wodby/gotpl/releases/download/${GOTPL_VER}/gotpl-alpine-linux-amd64-${GOTPL_VER}.tar.gz | tar xz -C /usr/local/bin && \
+RUN apk add --update \
+        sudo \
+        build-base \
+        ruby-dev \
+        ca-certificates \
+        wget \
+        bash && \
 
-# Copy the Fluentd configuration file.
-COPY td-agent.conf.tpl /etc/gotpl/
+        wget -qO- ${GOTPL_URL} | tar xz -C /usr/local/bin && \
 
-COPY build.sh /tmp/build.sh
-RUN /tmp/build.sh
+        sudo -u fluent gem install \
+            fluent-plugin-elasticsearch && \
 
+        sudo -u fluent gem sources --clear-all && \
+        apk del build-base *-dev && \
+        rm -rf /var/cache/apk/* /home/fluent/.gem/ruby/2.3.0/cache/*.gem && \
+        rm /fluentd/etc/fluent.conf
+
+USER fluent
+
+EXPOSE 24228
+
+COPY fluent.conf.tpl /etc/gotpl/
 COPY docker-entrypoint.sh /
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

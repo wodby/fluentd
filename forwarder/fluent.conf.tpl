@@ -1,114 +1,11 @@
-# This configuration file for Fluentd / td-agent is used
-# to watch changes to Docker log files. The kubelet creates symlinks that
-# capture the pod name, namespace, container name & Docker container ID
-# to the docker logs for pods in the /var/log/containers directory on the host.
-# If running this fluentd configuration in a Docker container, the /var/log
-# directory should be mounted in the container.
-#
-# These logs are then submitted to Elasticsearch which assumes the
-# installation of the fluent-plugin-elasticsearch & the
-# fluent-plugin-kubernetes_metadata_filter plugins.
-# See https://github.com/uken/fluent-plugin-elasticsearch &
-# https://github.com/fabric8io/fluent-plugin-kubernetes_metadata_filter for
-# more information about the plugins.
-# Maintainer: Jimmi Dyson <jimmidyson@gmail.com>
-#
-# Example
-# =======
-# A line in the Docker log file might look like this JSON:
-#
-# {"log":"2014/09/25 21:15:03 Got request with path wombat\n",
-#  "stream":"stderr",
-#   "time":"2014-09-25T21:15:03.499185026Z"}
-#
-# The time_format specification below makes sure we properly
-# parse the time format produced by Docker. This will be
-# submitted to Elasticsearch and should appear like:
-# $ curl 'http://elasticsearch-logging:9200/_search?pretty'
-# ...
-# {
-#      "_index" : "logstash-2014.09.25",
-#      "_type" : "fluentd",
-#      "_id" : "VBrbor2QTuGpsQyTCdfzqA",
-#      "_score" : 1.0,
-#      "_source":{"log":"2014/09/25 22:45:50 Got request with path wombat\n",
-#                 "stream":"stderr","tag":"docker.container.all",
-#                 "@timestamp":"2014-09-25T22:45:50+00:00"}
-#    },
-# ...
-#
-# The Kubernetes fluentd plugin is used to write the Kubernetes metadata to the log
-# record & add labels to the log record if properly configured. This enables users
-# to filter & search logs on any metadata.
-# For example a Docker container's logs might be in the directory:
-#
-#  /var/lib/docker/containers/997599971ee6366d4a5920d25b79286ad45ff37a74494f262e3bc98d909d0a7b
-#
-# and in the file:
-#
-#  997599971ee6366d4a5920d25b79286ad45ff37a74494f262e3bc98d909d0a7b-json.log
-#
-# where 997599971ee6... is the Docker ID of the running container.
-# The Kubernetes kubelet makes a symbolic link to this file on the host machine
-# in the /var/log/containers directory which includes the pod name and the Kubernetes
-# container name:
-#
-#    synthetic-logger-0.25lps-pod_default_synth-lgr-997599971ee6366d4a5920d25b79286ad45ff37a74494f262e3bc98d909d0a7b.log 
-#    ->
-#    /var/lib/docker/containers/997599971ee6366d4a5920d25b79286ad45ff37a74494f262e3bc98d909d0a7b/997599971ee6366d4a5920d25b79286ad45ff37a74494f262e3bc98d909d0a7b-json.log
-#
-# The /var/log directory on the host is mapped to the /var/log directory in the container
-# running this instance of Fluentd and we end up collecting the file:
-#
-#   /var/log/containers/synthetic-logger-0.25lps-pod_default_synth-lgr-997599971ee6366d4a5920d25b79286ad45ff37a74494f262e3bc98d909d0a7b.log
-#
-# This results in the tag:
-#
-#  var.log.containers.synthetic-logger-0.25lps-pod_default_synth-lgr-997599971ee6366d4a5920d25b79286ad45ff37a74494f262e3bc98d909d0a7b.log
-#
-# The Kubernetes fluentd plugin is used to extract the namespace, pod name & container name
-# which are added to the log message as a kubernetes field object & the Docker container ID
-# is also added under the docker field object.
-# The final tag is:
-#
-#   kubernetes.var.log.containers.synthetic-logger-0.25lps-pod_default_synth-lgr-997599971ee6366d4a5920d25b79286ad45ff37a74494f262e3bc98d909d0a7b.log
-#
-# And the final log record look like:
-#
-# {
-#   "log":"2014/09/25 21:15:03 Got request with path wombat\n",
-#   "stream":"stderr",
-#   "time":"2014-09-25T21:15:03.499185026Z",
-#   "kubernetes": {
-#     "namespace": "default",
-#     "pod_name": "synthetic-logger-0.25lps-pod",
-#     "container_name": "synth-lgr"
-#   },
-#   "docker": {
-#     "container_id": "997599971ee6366d4a5920d25b79286ad45ff37a74494f262e3bc98d909d0a7b"
-#   }
-# }
-#
-# This makes it easier for users to search for logs by pod name or by
-# the name of the Kubernetes container regardless of how many times the
-# Kubernetes pod has been restarted (resulting in a several Docker container IDs).
-#
-# TODO: Propagate the labels associated with a container along with its logs
-# so users can query logs using labels as well as or instead of the pod name
-# and container name. This is simply done via configuration of the Kubernetes
-# fluentd plugin but requires secrets to be enabled in the fluent pod. This is a
-# problem yet to be solved as secrets are not usable in static pods which the fluentd
-# pod must be until a per-node controller is available in Kubernetes.
-
-# Do not directly collect fluentd's own logs to avoid infinite loops.
 <match fluent.**>
-  type null
+  @type null
 </match>
 
 # Example:
 # {"log":"[info:2016-02-16T16:04:05.930-08:00] Some log text here\n","stream":"stdout","time":"2016-02-17T00:04:05.931087621Z"}
 <source>
-  type tail
+  @type tail
   path /var/log/containers/*.log
   pos_file /var/log/es-containers.log.pos
   time_format %Y-%m-%dT%H:%M:%S.%NZ
@@ -120,7 +17,7 @@
 # Example:
 # 2015-12-21 23:17:22,066 [salt.state       ][INFO    ] Completed state [net.ipv4.ip_forward] at time 23:17:22.066081
 <source>
-  type tail
+  @type tail
   format /^(?<time>[^ ]* [^ ,]*)[^\[]*\[[^\]]*\]\[(?<severity>[^ \]]*) *\] (?<message>.*)$/
   time_format %Y-%m-%d %H:%M:%S
   path /var/log/salt/minion
@@ -131,7 +28,7 @@
 # Example:
 # Dec 21 23:17:22 gke-foo-1-1-4b5cbd14-node-4eoj startupscript: Finished running startup script /var/run/google.startup.script
 <source>
-  type tail
+  @type tail
   format syslog
   path /var/log/startupscript.log
   pos_file /var/log/es-startupscript.log.pos
@@ -142,7 +39,7 @@
 # time="2016-02-04T06:51:03.053580605Z" level=info msg="GET /containers/json"
 # time="2016-02-04T07:53:57.505612354Z" level=error msg="HTTP Error" err="No such image: -f" statusCode=404
 <source>
-  type tail
+  @type tail
   format /^time="(?<time>[^)]*)" level=(?<severity>[^ ]*) msg="(?<message>[^"]*)"( err="(?<error>[^"]*)")?( statusCode=($<status_code>\d+))?/
   path /var/log/docker.log
   pos_file /var/log/es-docker.log.pos
@@ -152,7 +49,7 @@
 # Example:
 # 2016/02/04 06:52:38 filePurge: successfully removed file /var/etcd/data/member/wal/00000000000006d0-00000000010a23d1.wal
 <source>
-  type tail
+  @type tail
   # Not parsing this, because it doesn't have anything particularly useful to
   # parse out of it (like severities).
   format none
@@ -168,7 +65,7 @@
 # Example:
 # I0204 07:32:30.020537    3368 server.go:1048] POST /stats/container/: (13.972191ms) 200 [[Go-http-client/1.1] 10.244.1.3:40537]
 <source>
-  type tail
+  @type tail
   format multiline
   multiline_flush_interval 5s
   format_firstline /^\w\d{4}/
@@ -182,7 +79,7 @@
 # Example:
 # I1118 21:26:53.975789       6 proxier.go:1096] Port "nodePort for kube-system/default-http-backend:http" (:31429/tcp) was open before and is still needed
 <source>
-  type tail
+  @type tail
   format multiline
   multiline_flush_interval 5s
   format_firstline /^\w\d{4}/
@@ -196,7 +93,7 @@
 # Example:
 # I0204 07:00:19.604280       5 handlers.go:131] GET /api/v1/nodes: (1.624207ms) 200 [[kube-controller-manager/v1.1.3 (linux/amd64) kubernetes/6a81b50] 127.0.0.1:38266]
 <source>
-  type tail
+  @type tail
   format multiline
   multiline_flush_interval 5s
   format_firstline /^\w\d{4}/
@@ -210,7 +107,7 @@
 # Example:
 # I0204 06:55:31.872680       5 servicecontroller.go:277] LB already exists and doesn't need update for service kube-system/kube-ui
 <source>
-  type tail
+  @type tail
   format multiline
   multiline_flush_interval 5s
   format_firstline /^\w\d{4}/
@@ -224,7 +121,7 @@
 # Example:
 # W0204 06:49:18.239674       7 reflector.go:245] pkg/scheduler/factory/factory.go:193: watch of *api.Service ended with: 401: The event in requested index is outdated and cleared (the requested history has been cleared [2578313/2577886]) [2579312]
 <source>
-  type tail
+  @type tail
   format multiline
   multiline_flush_interval 5s
   format_firstline /^\w\d{4}/
@@ -238,7 +135,7 @@
 # Example:
 # I1104 10:36:20.242766       5 rescheduler.go:73] Running Rescheduler
 <source>
-  type tail
+  @type tail
   format multiline
   multiline_flush_interval 5s
   format_firstline /^\w\d{4}/
@@ -252,7 +149,7 @@
 # Example:
 # I0603 15:31:05.793605       6 cluster_manager.go:230] Reading config from path /etc/gce.conf
 <source>
-  type tail
+  @type tail
   format multiline
   multiline_flush_interval 5s
   format_firstline /^\w\d{4}/
@@ -266,7 +163,7 @@
 # Example:
 # I0603 15:31:05.793605       6 cluster_manager.go:230] Reading config from path /etc/gce.conf
 <source>
-  type tail
+  @type tail
   format multiline
   multiline_flush_interval 5s
   format_firstline /^\w\d{4}/
@@ -279,33 +176,33 @@
 
 # Uncomment in a case of daemon-set usage
 <filter exceptions.kubernetes.**>
-  type kubernetes_metadata
+  @type kubernetes_metadata
 </filter>
 
 # Custom config begin
 
 # <filter kubernetes.**>
-#   @type record_transformer
+#   @@type record_transformer
 #   auto_typecast true
 
 #   <record>
 #     application ${kubernetes["namespace_name"]}
-#     service ${kubernetes["container_name"]}        
+#     service ${kubernetes["container_name"]}
 #     replica ${kubernetes["pod_name"]}
-#     server ${kubernetes["host"]}    
+#     server ${kubernetes["host"]}
 #   </record>
 # </filter>
 
 # <filter kubernetes.var.log.containers.web-backend-**>
-#   type concat
+#   @type concat
 #   key log
-#   log_level error  
+#   log_level error
 #   multiline_start_regexp /^.+/
 #   flush_interval 1s
 # </filter>
 
 # <filter kubernetes.var.log.containers.web-backend-**>
-#   type concat
+#   @type concat
 #   key log
 #   log_level error
 #   multiline_start_regexp /PHP (?:Notice|Parse error|Fatal error|Warning):/
@@ -315,7 +212,7 @@
 # </filter>
 
 # <match kubernetes.var.log.containers.**>
-#   type rewrite
+#   @type rewrite
 #   remove_prefix kubernetes
 #   add_prefix exceptions
 #   # <rule>
@@ -325,41 +222,46 @@
 #   # </rule>
 # </match>
 
-<match exceptions.kubernetes.var.log.containers.**>
-  type detect_exceptions
-  message log
-  languages php
-  remove_tag_prefix exceptions
-  multiline_flush_interval 1
-</match>
+#<match exceptions.kubernetes.var.log.containers.**>
+#  @type detect_exceptions
+#  message log
+#  languages php
+#  remove_tag_prefix exceptions
+#  multiline_flush_interval 1
+#</match>
 
 # <match exceptions.kubernetes.var.log.containers.**>
-#   type null
+#   @type null
 # </match>
 
 <match kubernetes.var.log.containers.*_logging_**>
-  type null
+  @type null
 </match>
 
 <match kubernetes.var.log.containers.*_monitoring_**>
-  type null
+  @type null
 </match>
 
 <match kubernetes.var.log.containers.*_kube-system_**>
-  type null
+  @type null
 </match>
 
 <match kubernetes.var.log.containers.*_wodby_**>
-  type null
+  @type null
 </match>
 
 # Custom config end
 
 <match **>
-   type secure_forward
-   shared_key {{ getenv "FLUENTD_SHARED_KEY" "FLUENTD_SECRET" }}
-   self_hostname {{ getenv "FLUENTD_SELF_HOSTNAME" "node1.example.com" }}
-   <server>
-     host {{ getenv "FLUENTD_SERVER_HOST" "aggregator.example.com" }}
-   </server>
+  @id {{ getenv "FLUENTD_ID" "WODBY_FORWARDER" }}
+  @type forward
+
+  transport tls
+  tls_cert_path /fluentd/etc/cert.pem
+  tls_allow_self_signed_cert true
+
+  <server>
+    host {{ getenv "FLUENTD_AGGREGATOR_HOST" "example.com" }}
+    port {{ getenv "FLUENTD_AGGREGATOR_PORT" "24228" }}
+  </server>
 </match>
